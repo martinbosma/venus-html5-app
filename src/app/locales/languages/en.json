@@ -106,7 +106,22 @@
             "webgl": "WebGL",
             "webglNotSupported": "Not Supported"
         },
-        "diagnostics": "Diagnostics"
+        "diagnostics": "Diagnostics",
+        "gx": {
+            "app": "App",
+            "ethernet": "Ethernet",
+            "gxDevice": "GX device",
+            "linkLocal": "Link-local IPv4",
+            "n2k": "NMEA 2000",
+            "n2kAddress": "Address %{address}",
+            "n2kAddressUnknown": "Enabled, address unknown",
+            "n2kNoAddress": "No address claimed",
+            "n2kNotEnabled": "Not enabled",
+            "notConnected": "Not connected",
+            "product": "Product",
+            "static": "Static",
+            "wifi": "Wi-Fi"
+        }
     },
     "error": {
         "errorWithMessage": "Error: %{message}",

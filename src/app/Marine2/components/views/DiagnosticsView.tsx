@@ -8,11 +8,16 @@ import { useWindowSize } from "../../utils/hooks/use-window-size"
 import Paginator from "../ui/Paginator"
 import { useBrowserFeatures, WebGLDiagnostics } from "../../utils/hooks/use-browser-features"
 import Button from "../ui/Button"
+import { GxDeviceInfo, useGxDeviceInfo } from "../../utils/hooks/use-gx-device-info"
+import { formatAddress, isConnected, N2kStatus, NetworkService } from "../../utils/helpers/gx-device-info"
+import packageInfo from "../../../../../package.json"
+import { BUILD_TIMESTAMP } from "../../utils/constants/generic"
 
 const DiagnosticsView = () => {
   const mqtt = useMqtt()
   const windowSize = useWindowSize()
   const browserFeatures = useBrowserFeatures()
+  const gxDeviceInfo = useGxDeviceInfo()
   // Re-render to sync button label when diagConsole visibility changes (including [Close])
   const [, forceUpdate] = useState(0)
   useEffect(() => {
@@ -27,6 +32,22 @@ const DiagnosticsView = () => {
       window.diagConsole.toggle()
     }
   }
+
+  const gxDiagnostics = (
+    <DiagnosticsTable title={translate("diagnostics.gx.gxDevice")} diagnostics={getGxDiagnostics(gxDeviceInfo)} />
+  )
+
+  // One row per CAN port, named as in the GX settings
+  const n2kDiagnostics =
+    gxDeviceInfo.n2kPorts.length > 0 ? (
+      <DiagnosticsTable
+        title={translate("diagnostics.gx.n2k")}
+        diagnostics={gxDeviceInfo.n2kPorts.map(({ port, status }) => ({
+          property: port,
+          value: formatN2kStatus(status),
+        }))}
+      />
+    ) : null
 
   const connectionDiagnostics = (
     <DiagnosticsTable
@@ -58,6 +79,8 @@ const DiagnosticsView = () => {
     <MainLayout title={translate("diagnostics.diagnostics")}>
       <div className={"h-full w-full overflow-hidden"}>
         <Paginator orientation={"vertical"}>
+          <div className={"container mx-auto max-w-screen-md mb-4"}>{gxDiagnostics}</div>
+          <div className={n2kDiagnostics ? "container mx-auto max-w-screen-md mb-4" : ""}>{n2kDiagnostics}</div>
           <div className={"container mx-auto max-w-screen-md mb-4"}>{connectionDiagnostics}</div>
           <div className={"container mx-auto max-w-screen-md"}>{deviceDiagnostics}</div>
         </Paginator>
@@ -82,6 +105,78 @@ const getColorSchemePreferences = () => {
     .join(", ")
 
   return preferences || translate("diagnostics.device.unspecified")
+}
+
+const formatMethod = (method: string) => {
+  switch (method) {
+    case "dhcp":
+      return "DHCP"
+    case "manual":
+    case "fixed":
+      return translate("diagnostics.gx.static")
+    default:
+      return method
+  }
+}
+
+const formatNetworkService = (service?: NetworkService) => {
+  if (!service || !isConnected(service)) return translate("diagnostics.gx.notConnected")
+  return [formatAddress(service) || "-", formatMethod(service.method)].filter((s) => s).join(", ")
+}
+
+// One row per Ethernet service and per connected Wi-Fi network; the Wi-Fi
+// services also include every network found in a scan.
+const getNetworkDiagnostics = (services?: NetworkService[]) => {
+  if (!services) return [{ property: translate("diagnostics.gx.ethernet"), value: "-" }]
+
+  const rows = (label: string, list: NetworkService[]) =>
+    (list.length > 0 ? list : [undefined]).map((service, index) => ({
+      property: list.length > 1 ? `${label} ${index + 1}` : label,
+      value: formatNetworkService(service),
+    }))
+
+  const ethernet = services.filter((s) => s.technology === "ethernet")
+  const wifi = services.filter((s) => s.technology === "wifi")
+  return [
+    ...rows(translate("diagnostics.gx.ethernet"), ethernet),
+    ...(wifi.length > 0 ? rows(translate("diagnostics.gx.wifi"), wifi.filter(isConnected)) : []),
+  ]
+}
+
+const formatN2kStatus = (status: N2kStatus) => {
+  switch (status.state) {
+    case "address":
+      return translate("diagnostics.gx.n2kAddress", { address: status.address })
+    case "noAddress":
+      return translate("diagnostics.gx.n2kNoAddress")
+    case "addressUnknown":
+      return translate("diagnostics.gx.n2kAddressUnknown")
+    default:
+      return translate("diagnostics.gx.n2kNotEnabled")
+  }
+}
+
+const getGxDiagnostics = (info: GxDeviceInfo) => {
+  return [
+    {
+      property: translate("diagnostics.gx.product"),
+      value: info.model ?? "-",
+    },
+    {
+      property: translate("versionInfo.venusOs"),
+      value: info.firmwareVersion
+        ? `${info.firmwareVersion}${info.firmwareBuild ? ` (${info.firmwareBuild})` : ""}`
+        : "-",
+    },
+    {
+      property: translate("diagnostics.gx.app"),
+      value: `${packageInfo.version} ${process.env.REACT_APP_WHITELABEL} (${BUILD_TIMESTAMP})`,
+    },
+    ...getNetworkDiagnostics(info.networkServices),
+    ...(info.linkLocalAddress
+      ? [{ property: translate("diagnostics.gx.linkLocal"), value: info.linkLocalAddress }]
+      : []),
+  ]
 }
 
 const getConnectionDiagnostics = (mqtt: MqttStore) => {
