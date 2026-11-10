@@ -7,6 +7,8 @@ export interface NetworkService {
   netmask: string
   method: string
   state: string
+  // undefined when venus-platform doesn't publish them, as in older Venus OS versions
+  ipv6Addresses?: string[]
 }
 
 export interface CanInterface {
@@ -43,10 +45,17 @@ export const parseNetworkServices = (value: unknown): NetworkService[] | undefin
         netmask: String(service.Netmask ?? ""),
         method: String(service.Method ?? ""),
         state: String(service.State ?? ""),
+        ipv6Addresses: Array.isArray(service.Ipv6Addresses) ? service.Ipv6Addresses.map(String) : undefined,
       })
     })
   })
   return services
+}
+
+// Link-local (fe80::/10) first: on a Garmin network that is the address in use
+export const sortIpv6Addresses = (addresses: string[]) => {
+  const isLinkLocal = (a: string) => /^fe[89ab]/i.test(a)
+  return addresses.filter(isLinkLocal).concat(addresses.filter((a) => !isLinkLocal(a)))
 }
 
 // platform/0/CanBus/Interfaces is an array of { interface, name, config }

@@ -5,6 +5,7 @@ import {
   netmaskToPrefixLength,
   parseCanInterfaces,
   parseNetworkServices,
+  sortIpv6Addresses,
 } from "./gx-device-info"
 
 const services = JSON.stringify({
@@ -15,6 +16,7 @@ const services = JSON.stringify({
       Method: "dhcp",
       Netmask: "255.255.255.0",
       State: "online",
+      Ipv6Addresses: ["2001:db8::10/64", "fe80::1/64"],
     },
   },
   wifi: {
@@ -28,6 +30,12 @@ describe("parseNetworkServices", () => {
     const parsed = parseNetworkServices(services)!
     expect(parsed.map((s) => `${s.technology}/${s.name}`)).toEqual(["ethernet/Wired", "wifi/Boat", "wifi/Neighbour"])
     expect(parsed[0]).toMatchObject({ address: "192.168.1.10", method: "dhcp", state: "online" })
+  })
+
+  it("has the IPv6 addresses only when venus-platform publishes them", () => {
+    const [wired, boat] = parseNetworkServices(services)!
+    expect(wired.ipv6Addresses).toEqual(["2001:db8::10/64", "fe80::1/64"])
+    expect(boat.ipv6Addresses).toBeUndefined()
   })
 
   it("returns undefined for a missing or invalid value", () => {
@@ -100,5 +108,16 @@ describe("getN2kStatus", () => {
 
   it("doesn't know the address without /Nad", () => {
     expect(getN2kStatus(true, undefined)).toEqual({ state: "addressUnknown" })
+  })
+})
+
+describe("sortIpv6Addresses", () => {
+  it("puts the link-local addresses first and keeps the order otherwise", () => {
+    expect(sortIpv6Addresses(["2001:db8::10/64", "fd00::5/64", "fe80::1/64"])).toEqual([
+      "fe80::1/64",
+      "2001:db8::10/64",
+      "fd00::5/64",
+    ])
+    expect(sortIpv6Addresses([])).toEqual([])
   })
 })

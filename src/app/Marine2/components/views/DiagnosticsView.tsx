@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { ReactNode, useEffect, useState } from "react"
 import MainLayout from "../ui/MainLayout"
 import DiagnosticsTable from "../ui/DiagnosticsTable"
 import { MqttStore, useMqtt } from "@victronenergy/mfd-modules"
@@ -9,7 +9,13 @@ import Paginator from "../ui/Paginator"
 import { useBrowserFeatures, WebGLDiagnostics } from "../../utils/hooks/use-browser-features"
 import Button from "../ui/Button"
 import { GxDeviceInfo, useGxDeviceInfo } from "../../utils/hooks/use-gx-device-info"
-import { formatAddress, isConnected, N2kStatus, NetworkService } from "../../utils/helpers/gx-device-info"
+import {
+  formatAddress,
+  isConnected,
+  N2kStatus,
+  NetworkService,
+  sortIpv6Addresses,
+} from "../../utils/helpers/gx-device-info"
 import packageInfo from "../../../../../package.json"
 import { BUILD_TIMESTAMP } from "../../utils/constants/generic"
 
@@ -129,11 +135,23 @@ const formatNetworkService = (service?: NetworkService) => {
 const getNetworkDiagnostics = (services?: NetworkService[]) => {
   if (!services) return [{ property: translate("diagnostics.gx.ethernet"), value: "-" }]
 
-  const rows = (label: string, list: NetworkService[]) =>
-    (list.length > 0 ? list : [undefined]).map((service, index) => ({
-      property: list.length > 1 ? `${label} ${index + 1}` : label,
-      value: formatNetworkService(service),
-    }))
+  // The IPv4 row, then an IPv6 row when the service is connected and the GX publishes them
+  const rows = (label: string, list: NetworkService[]) => {
+    const result: { property: string; value: ReactNode }[] = []
+    ;(list.length > 0 ? list : [undefined]).forEach((service, index) => {
+      const property = list.length > 1 ? `${label} ${index + 1}` : label
+      result.push({ property, value: formatNetworkService(service) })
+      if (service && isConnected(service) && service.ipv6Addresses) {
+        result.push({
+          property: translate("diagnostics.gx.ipv6", { network: property }),
+          value: service.ipv6Addresses.length
+            ? sortIpv6Addresses(service.ipv6Addresses).map((a) => <div key={a}>{a}</div>)
+            : translate("diagnostics.gx.none"),
+        })
+      }
+    })
+    return result
+  }
 
   const ethernet = services.filter((s) => s.technology === "ethernet")
   const wifi = services.filter((s) => s.technology === "wifi")
